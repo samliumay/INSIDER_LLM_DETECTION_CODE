@@ -1,8 +1,14 @@
-.PHONY: data validate smoke baseline eval test ci publish-results
+.PHONY: benchmark data validate smoke baseline eval test ci publish-results
 RESULTS_REPO ?= logicBombExe/INSIDER_LLM_DETECTION_RESULTS
+BENCHMARK_REPO ?= https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK
+BENCHMARK_TAG ?= $(shell uv run python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['tool']['ild']['benchmark_tag'])")
 CONFIG ?= configs/smoke.yaml
 
-data:            ## rebuild benchmark conditions from upstream templates
+benchmark:       ## clone the benchmark at the declared tag next to this repo (skipped if present)
+	@test -d ../INSIDER_LLM_DETECTION_BENCHMARK && echo "../INSIDER_LLM_DETECTION_BENCHMARK already present" || \
+	  git clone --depth 1 --branch "$(BENCHMARK_TAG)" $(BENCHMARK_REPO) ../INSIDER_LLM_DETECTION_BENCHMARK
+
+data:            ## rebuild the benchmark's conditions from its bundled templates
 	uv run python ../INSIDER_LLM_DETECTION_BENCHMARK/build_conditions.py
 
 validate:        ## run the benchmark's validation gate

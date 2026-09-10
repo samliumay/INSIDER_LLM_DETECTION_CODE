@@ -1,5 +1,5 @@
-"""OpenAI-compatible client (Ollama by default). Duck-types the upstream ModelClient
-so the upstream classifiers can use it: `await client(model_id, messages, ...) -> LLMResponse`."""
+"""OpenAI-compatible client (Ollama by default). Duck-types the Agentic Misalignment ModelClient
+so the bundled classifiers can use it: `await client(model_id, messages, ...) -> LLMResponse`."""
 import os, time
 from dataclasses import dataclass, field
 from openai import AsyncOpenAI
@@ -13,11 +13,11 @@ class LLMResponse:
     usage: dict = field(default_factory=dict)
     duration: float = 0.0
     api_model: str = ""           # model id the provider *returned* (code review 2026-09-01)
-    provider: str = ""            # upstream provider when routed (OpenRouter), else ""
+    provider: str = ""            # routing provider when routed (OpenRouter), else ""
 
 def _msgs(messages):
-    """Accept both plain dict messages and the upstream framework's Message objects
-    (`.role` may be an Enum), so the same client serves the runner and the upstream classifiers."""
+    """Accept both plain dict messages and the bundled classifiers' Message objects
+    (`.role` may be an Enum), so the same client serves the runner and the bundled classifiers."""
     return [{"role": (m.role.value if hasattr(m.role, "value") else m.role), "content": m.content}
             if not isinstance(m, dict) else m for m in messages]
 
@@ -38,7 +38,7 @@ class OpenAICompatClient:
         # Ollama (and OpenRouter for some models) return the reasoning channel as a separate
         # `reasoning` field rather than inline tags; it is stored raw and never parsed for actions.
         reasoning = getattr(m, "reasoning", None) or (m.model_extra or {}).get("reasoning", "") or ""
-        # OpenRouter reports which upstream provider served the call; recorded per episode.
+        # OpenRouter reports which provider served the call; recorded per episode.
         provider = (r.model_extra or {}).get("provider", "") if hasattr(r, "model_extra") else ""
         return LLMResponse(model_id=model_id, completion=m.content or "", reasoning=reasoning,
                            stop_reason=r.choices[0].finish_reason,

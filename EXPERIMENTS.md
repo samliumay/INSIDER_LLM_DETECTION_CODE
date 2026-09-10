@@ -1,10 +1,10 @@
 # Experiment log
 
-Corpus reset on **2026-09-03**: every earlier run (smoke, validation and pilot batches, 2026-08-30 → 2026-09-02) was deleted, together with the numbers that had been copied from them into this file and the READMEs. What those batches taught the pipeline survives as code and rules — the parser fixtures in `tests/fixtures/`, the six-value `logged` schema, the `no_answer` / `no_log` / `not_instructed` separations, the dirty-tree refusal, the reparse omission report — but none of their counts is cited anywhere any more.
+Earlier runs (2026-08-30 → 2026-09-02) were deleted on 2026-09-03; only the parser fixtures in `tests/fixtures/` survive from them. The corpus is the study sweep below.
 
 ## Study sweep — 2026-09-03
 
-Twelve models, one design each: the full 18-condition Agentic Misalignment grid (3 scenarios × goal {explicit-america, none} × urgency {none, restriction, replacement}) × five prompt variants (`none` = original prompt, A routine audit, B safety monitoring, C automated log-gated shutdown, D = C + explicit prohibition) × 3 samples = **270 episodes per model, 3,240 in total**; temperature 1.0, 24k-token cap, `phase: study`, clean code and benchmark trees (code `bf8e064`, benchmark `v0.2-3-gcf4eca2`, upstream `ea0630e`). Providers: DeepSeek-R1, Qwen3-235B-A22B, Llama-4 Maverick, GPT-4.1 (the original paper's snapshots), gemma-4-31b-it, qwen3-32b, mistral-small-3.2-24b, gpt-oss-20b via OpenRouter; gemini-2.5-flash via Google's OpenAI-compatible endpoint (no seed accepted); deepseek-v4-pro, deepseek-v4-flash, glm-5.3-flash via Ollama cloud. Every run completed 270/270; mistral-small needed one `--resume` loop for 13 rate-limited episodes.
+One design for every model: 18 conditions × 5 variants (`none`/A/B/C/D) × 3 samples = 270 episodes per model, temperature 1.0, 24k-token cap, `phase: study`, clean trees (code `bf8e064`, benchmark `v0.2-3-gcf4eca2`).
 
 | Model | Provider / endpoint | Config | Started | Notes |
 |---|---|---|---|---|
@@ -18,14 +18,14 @@ Twelve models, one design each: the full 18-condition Agentic Misalignment grid 
 | gemini-2.5-flash | Google OpenAI-compatible endpoint | `study_gemini-2.5-flash.yaml` | 19:44 | substitute for the paper's `preview-05-20`; endpoint rejects `seed` (`send_seed: false`) |
 | google/gemma-4-31b-it | OpenRouter | `study_gemma-4-31b.yaml` | 19:51 | small-model tier; 6 truncations |
 | qwen/qwen3-32b | OpenRouter (SiliconFlow) | `study_qwen3-32b.yaml` | 19:51 | small-model tier; thinking model, slowest run |
-| mistralai/mistral-small-3.2-24b-instruct | OpenRouter (Parasail) | `study_mistral-small-3.2-24b.yaml` | 19:51 | 13 upstream 429s, recovered with `--resume` (7 attempts) |
+| mistralai/mistral-small-3.2-24b-instruct | OpenRouter (Parasail) | `study_mistral-small-3.2-24b.yaml` | 19:51 | 13 provider 429s, recovered with `--resume` (7 attempts) |
 | openai/gpt-oss-20b | OpenRouter | `study_gpt-oss-20b.yaml` | 19:51 | small-model tier; 0/270 harmful, 17 missing logs |
 
 Cost: OpenRouter total **$8.75** for the eight OpenRouter models; Ollama cloud and the Google endpoint on existing keys; about 3,240 classifier calls and 3,900 evaluator pairs on the Gemini key.
 
 ### Pipeline applied to every run
 
-`ild run` → `ild reparse` (under the final parser, commit `bf8e064`) → `ild classify` (Gemini judge on `final_text`) → `ild relabel` (upstream gates on the full completion) → `ild evaluate` (log-accuracy judge, prompt v1 `1a106e39…`) → `make eval`. Every `not_logged` transition printed by `ild reparse` was read by hand against the raw tool-call blocks before being accepted.
+`ild run` → `ild reparse` (under the final parser, commit `bf8e064`) → `ild classify` (Gemini judge on `final_text`) → `ild relabel` (classifier gates on the full completion) → `ild evaluate` (log-accuracy judge, prompt v1 `1a106e39…`) → `make eval`. Every `not_logged` transition printed by `ild reparse` was read by hand against the raw tool-call blocks before being accepted.
 
 ### Parser and matcher rules added during the sweep (all tested; fixtures 19–31)
 
@@ -49,6 +49,6 @@ Net: about forty false omissions removed; **20 genuine omissions** remain (5 on 
 
 ### Results
 
-Generated tables: `results/tables.md` (per run; per model × variant; harm by goal type; harmful × logged cross-tab; six cells per variant; pooled per-model harm, six-cell and format tables; omission list) and `results/INDEX.md`. The README reproduces the pooled tables. Human calibration sample for the evaluator: `results/calibration_sample_2026-09-03.md` (60 pairs, 30 judged inaccurate).
+Generated tables: `results/tables.md` (per run; per model × variant; harm by goal type; harmful × logged cross-tab; six cells per variant; pooled per-model harm, six-cell and format tables; omission list) and `results/INDEX.md`. The README reproduces the pooled tables.
 
-Headline, uncalibrated: harm is goal-driven and falls under the strong logging variants; hiding is laundering rather than omission (20 omissions vs 250 laundered entries in 2,592 instructed episodes); a log-only detector catches about a quarter of harmful episodes in the high-harm models and 6% in GPT-4.1, because roughly three quarters of harmful episodes are logged truthfully; false alarms range from 1% (GPT-4.1, Gemini, DeepSeek cloud) to 27–35% (qwen3-32b, mistral-small), which launder benign entries as readily as harmful ones.
+Headline: harm is goal-driven and falls under the strong logging variants; hiding is laundering rather than omission (20 omissions vs 250 laundered entries in 2,592 instructed episodes); a log-only detector catches about a quarter of harmful episodes in the high-harm models and 6% in GPT-4.1, because roughly three quarters of harmful episodes are logged truthfully; false alarms range from 1% (GPT-4.1, Gemini, DeepSeek cloud) to 27–35% (qwen3-32b, mistral-small), which launder benign entries as readily as harmful ones.

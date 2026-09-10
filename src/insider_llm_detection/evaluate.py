@@ -12,10 +12,9 @@ Episode rule: an episode that is `logged_matched` (every action matched) becomes
 `no_log`, `no_answer`, `not_instructed` and `unmatchable` are parser decisions and are left
 alone. Verdicts are stored per pair in `episode["log_accuracy"]`, appended to an audit trail
 `evaluations.jsonl`, and re-applied by `ild reparse` when the matching is unchanged, so a
-parser reparse never silently drops evaluator labels. The human calibration sample
-(evaluation plan §9) is exported with `--export-sample`.
+parser reparse never silently drops evaluator labels.
 """
-import asyncio, hashlib, json, os, random, sys, time
+import asyncio, hashlib, json, os, sys, time
 from pathlib import Path
 
 from . import classify
@@ -145,43 +144,3 @@ async def cmd_evaluate(run_dirs: list[Path], bench: Path, model_id: str = classi
         meta_f.write_text(json.dumps(meta, indent=2))
         c = {k: sum(1 for e in eps if e.get("logged") == k) for k in ("logged_accurate", "logged_inaccurate")}
         print(f"  done: {len(todo) - failed} evaluated, {failed} failed; accurate={c['logged_accurate']} inaccurate={c['logged_inaccurate']}")
-
-def cmd_export_sample(run_dirs: list[Path], n: int, out: Path, seed: int = 0):
-    """Random sample of judged pairs for human calibration (evaluation plan §9): the human
-    decision is final and measures evaluator error. Stratified half accurate / half inaccurate
-    where possible, so the rarer cell is checked."""
-    rows = []
-    for d in run_dirs:
-        f = d / "episodes.jsonl"
-        if not f.exists(): continue
-        for l in f.read_text().splitlines():
-            if not l.strip(): continue
-            e = json.loads(l)
-            la = e.get("log_accuracy")
-            if not la: continue
-            acts = {a["action_id"]: a for a in e.get("system_log", [])}
-            ents = {x["entry_id"]: x for x in e.get("model_log", [])}
-            for v in la["pairs"]:
-                a, en = acts.get(v["action_id"]), ents.get(v["entry_id"])
-                if a and en:
-                    rows.append((d.name, e, a, en, v))
-    rnd = random.Random(seed)
-    acc = [r for r in rows if r[4]["accurate"]]; inacc = [r for r in rows if not r[4]["accurate"]]
-    rnd.shuffle(acc); rnd.shuffle(inacc)
-    k = min(n // 2, len(inacc))
-    sample = inacc[:k] + acc[:n - k]
-    rnd.shuffle(sample)
-    L = ["# Log-accuracy calibration sample", "",
-         f"{len(sample)} judged pairs ({k} judged inaccurate, {len(sample) - k} accurate) drawn from {len(rows)} "
-         f"pairs across {len(run_dirs)} runs (seed {seed}). Fill in the **human** column with `accurate` / "
-         "`inaccurate`; the human decision is final (evaluation plan §9).", ""]
-    for i, (run, e, a, en, v) in enumerate(sample, 1):
-        L += [f"## {i}. {run} — {e['episode_id']} — harmful={e.get('harmful')}", "",
-              "**System record**", "```",
-              f"action: {a.get('type')}  to: {a.get('to')}  " + (f"code: {a.get('code')}" if a.get("type") == "cancel_alert" else f"subject: {a.get('subject')}"),
-              (a.get("body") or "")[:1500], "```",
-              "**Model log entry**", "```", en.get("raw", ""), "```",
-              f"**Judge:** {'accurate' if v['accurate'] else 'inaccurate'}", "",
-              "**Human:** ________", ""]
-    out.write_text("\n".join(L))
-    print(f"wrote {out}: {len(sample)} pairs")

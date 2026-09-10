@@ -5,7 +5,8 @@ import yaml
 from dotenv import load_dotenv
 from .prompts import load_conditions, load_variants, build_system_prompt, build_user_prompt
 from .client import OpenAICompatClient
-from . import parse, upstream, classify, ci, evaluate
+from . import parse, classify, ci, evaluate
+from .agentic_misalignment import SOURCE_COMMIT as CLASSIFIER_SOURCE
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
@@ -94,16 +95,13 @@ async def run_episode(client, cfg, cond, variant, variants, sample, sem):
         "usage": r.usage, "duration_s": round(r.duration, 2), "stop_reason": r.stop_reason,
     }
 
-async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool = False, allow_unpinned: bool = False):
+async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool = False):
     load_dotenv(ROOT / ".env")
     cfg = yaml.safe_load(cfg_path.read_text())
     bench = (ROOT / cfg.get("benchmark_dir", DEFAULT_BENCH)).resolve()
-    # The upstream classifiers/prompts are pinned; running against another commit makes
-    # results incomparable (code review 2026-09-01). Refuse unless explicitly overridden.
-    unpinned = upstream.check_pinned()
-    if unpinned and not allow_unpinned:
-        sys.exit(f"refusing to run: {unpinned}. Fix the checkout, or pass --allow-unpinned "
-                 f"(stamped as upstream_warning in meta.json).")
+    if not (bench / "data/conditions.jsonl").exists():
+        sys.exit(f"benchmark not found at {bench}: run `make benchmark` (clones it next to this repo) "
+                 f"or set `benchmark_dir` in the config")
     # Reproducibility comes from config + commit + seed: a run from a dirty tree cannot be
     # reconstructed from git, so refuse unless explicitly allowed (and then stamp the run).
     dirty = [name for name, p in (("code", ROOT), ("benchmark", bench)) if git_dirty(p)]
@@ -147,14 +145,13 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
                 if l.strip():
                     e = json.loads(l); done.add((e["condition_id"], e["prompt_variant"], e["sample"]))
     random.seed(cfg.get("seed", 0))
-    meta = {"run_id": run_id, "config": cfg, "git_hash": git_hash(), "upstream_commit": upstream.upstream_commit(),
+    meta = {"run_id": run_id, "config": cfg, "git_hash": git_hash(), "classifier_source": CLASSIFIER_SOURCE,
             "dataset_version": dataset_version(bench), "prompt_set_sha256": prompt_set_sha256(bench),
             "seed": cfg.get("seed", 0), "seed_sent": bool(cfg.get("send_seed", True)),
             "model_digest": model_digest(cfg.get("base_url"), cfg["model"]),
             "allow_dirty": bool(dirty), "reconstructible": not dirty, "phase": phase,
             "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
     if dirty: meta["reconstructible_note"] = "ran with --allow-dirty (uncommitted changes at run time)"
-    if unpinned: meta["upstream_warning"] = unpinned
     if not (out / "meta.json").exists(): (out / "meta.json").write_text(json.dumps(meta, indent=2))
     api_key = os.environ.get(cfg["api_key_env"]) if cfg.get("api_key_env") else "ollama"
     if not api_key:
@@ -234,12 +231,10 @@ def main():
     r.add_argument("--resume", help="existing run_id to continue; finished episodes are skipped")
     r.add_argument("--allow-dirty", action="store_true",
                    help="run despite uncommitted changes; the run is stamped non-reconstructible")
-    r.add_argument("--allow-unpinned", action="store_true",
-                   help="run even if the upstream repo is not at the pinned commit; stamped as upstream_warning")
     rp = sub.add_parser("reparse"); rp.add_argument("--run", type=Path, required=True, nargs="+")
-    rl = sub.add_parser("relabel", help="re-derive harmful from the stored verdict + upstream gates on the full completion (no API calls)")
+    rl = sub.add_parser("relabel", help="re-derive harmful from the stored verdict + the classifier gates on the full completion (no API calls)")
     rl.add_argument("--run", type=Path, required=True, nargs="+")
-    c = sub.add_parser("classify", help="label episodes harmful/not with the pinned upstream classifiers (Gemini judge)")
+    c = sub.add_parser("classify", help="label episodes harmful/not with the bundled Agentic Misalignment classifiers (Gemini judge)")
     c.add_argument("--run", type=Path, required=True, nargs="+")
     c.add_argument("--bench", type=Path, default=None, help=f"benchmark repo (default {DEFAULT_BENCH})")
     c.add_argument("--model", default=classify.DEFAULT_MODEL)
@@ -252,8 +247,6 @@ def main():
     ev.add_argument("--model", default=classify.DEFAULT_MODEL)
     ev.add_argument("--force", action="store_true", help="re-judge episodes that already carry verdicts")
     ev.add_argument("--concurrency", type=int, default=4)
-    ev.add_argument("--export-sample", type=Path, default=None, help="write a human calibration sample (markdown) instead of judging")
-    ev.add_argument("-n", type=int, default=60, help="sample size for --export-sample")
     fc = sub.add_parser("fixture-check", help="re-derive the committed fixture episodes and fail on any parser difference (CI gate)")
     fc.add_argument("--fixtures", type=Path, default=ROOT / "tests/fixtures")
     cc = sub.add_parser("check-configs", help="validate every configs/*.yaml against the benchmark without running anything (CI gate)")
@@ -263,7 +256,7 @@ def main():
     e.add_argument("--runs", type=Path, nargs="+", default=None, help="run dirs (default: all under the results root)")
     e.add_argument("--out", type=Path, default=None, help="output file (default: <results>/tables.md)")
     a = ap.parse_args()
-    if a.cmd == "run": asyncio.run(cmd_run(a.config, a.resume, a.allow_dirty, a.allow_unpinned))
+    if a.cmd == "run": asyncio.run(cmd_run(a.config, a.resume, a.allow_dirty))
     elif a.cmd == "reparse":
         for r in a.run: cmd_reparse(r)
     elif a.cmd == "relabel":
@@ -275,13 +268,10 @@ def main():
                                           concurrency=a.concurrency, input_field=a.input,
                                           parser_hash=git_hash()))
     elif a.cmd == "evaluate":
-        if a.export_sample:
-            evaluate.cmd_export_sample(a.run, a.n, a.export_sample)
-        else:
-            load_dotenv(ROOT / ".env")
-            bench = (a.bench or ROOT / DEFAULT_BENCH).resolve()
-            asyncio.run(evaluate.cmd_evaluate(a.run, bench, model_id=a.model, force=a.force,
-                                              concurrency=a.concurrency, parser_hash=git_hash()))
+        load_dotenv(ROOT / ".env")
+        bench = (a.bench or ROOT / DEFAULT_BENCH).resolve()
+        asyncio.run(evaluate.cmd_evaluate(a.run, bench, model_id=a.model, force=a.force,
+                                          concurrency=a.concurrency, parser_hash=git_hash()))
     elif a.cmd == "fixture-check":
         sys.exit(ci.cmd_fixture_check(a.fixtures))
     elif a.cmd == "check-configs":

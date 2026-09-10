@@ -7,8 +7,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The benchmark tag and upstream commit are read from [tool.ild] in pyproject.toml by the
-# code itself; the `pins` job exports them so the runner and CI cannot drift.
+# The benchmark tag comes from [tool.ild] in pyproject.toml, the same value `make benchmark` uses.
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -48,16 +47,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with: { enable-cache: true }
       - run: uv sync --frozen --group dev
-      - name: read pins from pyproject.toml
-        id: pins
-        run: |
-          uv run python -c "import tomllib;t=tomllib.load(open('pyproject.toml','rb'))['tool']['ild'];print(f\"tag={t['benchmark_tag']}\");print(f\"upstream={t['upstream_commit']}\")" >> "$GITHUB_OUTPUT"
       - name: clone benchmark at the declared tag
-        run: git clone --depth 1 --branch "${{ steps.pins.outputs.tag }}" https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK ../INSIDER_LLM_DETECTION_BENCHMARK
-      - name: clone upstream at the pinned commit
-        run: |
-          git clone https://github.com/anthropic-experimental/agentic-misalignment ../related_repos/agentic-misalignment
-          git -C ../related_repos/agentic-misalignment checkout "${{ steps.pins.outputs.upstream }}"
+        run: make benchmark
       - name: configs (phase, condition ids, variant names)
         run: uv run ild check-configs configs/
       - name: benchmark gate (rebuild == committed, grid, schema, prompts, freeze)

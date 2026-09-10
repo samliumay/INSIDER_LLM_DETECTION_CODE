@@ -9,7 +9,6 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "lxml>=4.9",
     "python-dotenv>=1.0",
-    "anthropic>=0.49",
     "google-genai>=2.21.0",
 ]
 
@@ -24,9 +23,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ild]
-# Single source for the pins the runner and CI both read (upstream.py, .github/workflows/ci.yml)
+# The benchmark revision `make benchmark` and CI clone.
 benchmark_tag = "v0.2"
-upstream_commit = "ea0630e1a3eaae7f9f9740fd2703229d3854ccda"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/insider_llm_detection"]

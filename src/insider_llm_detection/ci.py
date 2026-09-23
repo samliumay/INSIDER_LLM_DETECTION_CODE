@@ -20,6 +20,7 @@ DERIVED = ("final_text", "system_log", "model_log", "log_present", "unclosed_rea
 REQUIRED_KEYS = ("model", "phase")   # everything else has a documented default in run.py
 
 def _print_omission(e: dict, derived: dict):
+    """Print the unmatched actions and all log entries of a new `not_logged` episode."""
     matched = {aid for m in derived["model_log"] for aid in m["matched_action_ids"]}
     print(f"    NEW OMISSION {e['episode_id']} — verify by hand before reporting:")
     for a in derived["system_log"]:
@@ -29,6 +30,7 @@ def _print_omission(e: dict, derived: dict):
         print(f"      entry {m['entry_id']} {m['raw'][:160]!r}")
 
 def cmd_fixture_check(fixtures: Path) -> int:
+    """Re-derive parser fields for every fixture episode; return 1 on any mismatch."""
     eps = [json.loads(l) for l in (fixtures / "episodes.jsonl").read_text().splitlines() if l.strip()]
     expected = json.loads((fixtures / "expected.json").read_text())
     failures = 0
@@ -76,6 +78,7 @@ def validate_config(cfg: dict, conditions: set[str], variants: set[str], phases)
     return problems
 
 def cmd_check_configs(config_dir: Path, bench: Path, phases) -> int:
+    """Validate every configs/*.yaml against the benchmark; return 1 if any is invalid."""
     from .prompts import load_conditions, load_variants
     conditions = {c.condition_id for c in load_conditions(bench / "data/conditions.jsonl")}
     variants = set(load_variants(bench / "prompts"))

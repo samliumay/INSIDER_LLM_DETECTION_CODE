@@ -22,9 +22,5 @@ ild = "insider_llm_detection.run:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.ild]
-# The benchmark revision `make benchmark` and CI clone.
-benchmark_tag = "v0.2"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/insider_llm_detection"]

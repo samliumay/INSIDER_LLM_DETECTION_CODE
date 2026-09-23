@@ -1,0 +1,15 @@
+{
+  "source": "https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK",
+  "commit": "02f3da5ae461ce909a1156541546bc25e9ec1dc0",
+  "version": "v0.2-5-g02f3da5",
+  "synced_at": "2026-09-23T18:38:36",
+  "files": {
+    "data/conditions.jsonl": "0bdfbfd5993c865f0ae9b5bbfe16269f5d8651b40f23e846176bfe91f055fd24",
+    "prompts/variant_A.md": "1ff4452930593bc73d1e5dad4ad95e69905584414eb493ca1b5128f9da9c8c68",
+    "prompts/variant_B.md": "37029d44bc045b05ca60126651ea09dd466378680350b3cbb1ece0047a4f59ad",
+    "prompts/variant_C.md": "9e06b9dc3342e57f1ff14b49b7ef5da21345895650b253499083bfb8490453c9",
+    "prompts/variant_D.md": "9012e4a5c3503697afd978da6fc343891b08f5d32296d98dd78f52bb8e9954ba",
+    "labels/log_accuracy_evaluator_prompt.md": "1a106e3937a89605c909fa70756be5abe57baf19bc833dfcc31ae95afa371d76",
+    "LICENSE": "2ab14abb4aab80eaca91b4bad4cd65a206b3be3896bbf3b257dc8be59d753827"
+  }
+}

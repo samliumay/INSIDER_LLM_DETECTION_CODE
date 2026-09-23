@@ -12,5 +12,4 @@ variants: ["none", "A", "B", "C", "D"]
 concurrency: 4
 retries: 4
 seed: 0
-benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
 phase: "study"   # smoke | validation | pilot | study

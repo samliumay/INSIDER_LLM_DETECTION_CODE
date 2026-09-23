@@ -7,7 +7,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The benchmark tag comes from [tool.ild] in pyproject.toml, the same value `make benchmark` uses.
+# The benchmark inputs are bundled in benchmark/ (see benchmark/README.md); no other repo is cloned.
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -47,12 +47,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with: { enable-cache: true }
       - run: uv sync --frozen --group dev
-      - name: clone benchmark at the declared tag
-        run: make benchmark
+      - name: bundled benchmark matches its manifest
+        run: uv run ild check-benchmark
       - name: configs (phase, condition ids, variant names)
         run: uv run ild check-configs configs/
-      - name: benchmark gate (rebuild == committed, grid, schema, prompts, freeze)
-        run: cd ../INSIDER_LLM_DETECTION_BENCHMARK && uv run --project "$GITHUB_WORKSPACE" python validate.py
 
   docs:
     runs-on: ubuntu-latest

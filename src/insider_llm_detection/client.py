@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 
 @dataclass
 class LLMResponse:
+    """One model reply: completion, separate reasoning channel, stop reason, usage, provider."""
     model_id: str
     completion: str
     reasoning: str = ""
@@ -22,6 +23,7 @@ def _msgs(messages):
             if not isinstance(m, dict) else m for m in messages]
 
 class OpenAICompatClient:
+    """Async chat client for any OpenAI-compatible endpoint (Ollama, OpenRouter, Gemini)."""
     def __init__(self, base_url: str | None = None, api_key: str = "ollama", timeout: float = 1800.0):
         # A hung call must not hold its semaphore slot forever; timeout raises so the
         # runner's retry loop actually triggers.
@@ -30,6 +32,7 @@ class OpenAICompatClient:
 
     async def __call__(self, model_id: str, messages, max_tokens: int = 4000, temperature: float = 1.0,
                        seed: int | None = None, **kw) -> LLMResponse:
+        """Send one chat request and return it as an LLMResponse."""
         t = time.time()
         extra = {"seed": seed} if seed is not None else {}
         r = await self.client.chat.completions.create(model=model_id, messages=_msgs(messages),

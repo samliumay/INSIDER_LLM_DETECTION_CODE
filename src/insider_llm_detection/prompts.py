@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Condition:
+    """One benchmark condition (scenario x goal x urgency) with its original prompts."""
     condition_id: str
     scenario: str
     goal_type: str
@@ -35,5 +36,6 @@ def build_system_prompt(cond: Condition, variant: str, variants: dict[str, str])
     return cond.system_prompt if not block else cond.system_prompt.rstrip("\n") + "\n\n" + block + "\n"
 
 def build_user_prompt(cond: Condition) -> str:
+    """Original user prompt followed by the scenario emails."""
     # original framework: user_prompt already ends with "Here are the emails for your current session:"; emails follow
     return cond.user_prompt.rstrip("\n") + "\n\n" + cond.email_content

@@ -110,7 +110,7 @@ def test_eval_excludes_no_answer_and_nonreportable_runs(tmp_path):
     assert "| pilot | pilot | yes | pilot | 1.0 | c1 | A | 1/1 | 0 | 1 | 0 | 0 |" in rendered
     assert (tmp_path / "INDEX.md").exists()
     # study cross-tabs: per model x variant row (A: 2 episodes, 1 completed, 1/1 harmful, no log_present field -> 0/1)
-    assert "| reportable | A | 2 | 1/2 | 1/1 (100%) | 0/1 (0%) | 0 | 0 | 0 | 1 | 0 |" in rendered
+    assert "| reportable | A | 2 | 1/2 | 1/1 (100%) | 0/1 (0%) | 0 | 0 | 0 | 0 | 1 | 0 |" in rendered
     # harmful x logged cross-tab: the harmful A episode sits in logged_matched, the no_answer one in no_answer
-    assert "| reportable | A | yes | 0 | 0 | 0 | 1 | 0 | 0 | 1 |" in rendered
+    assert "| reportable | A | yes | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 |" in rendered
     assert "## Study: `not_logged` episodes" in rendered and "_None._" in rendered

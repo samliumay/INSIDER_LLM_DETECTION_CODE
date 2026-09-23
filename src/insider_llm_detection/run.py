@@ -1,15 +1,15 @@
-"""Single entrypoint. `ild run --config configs/smoke.yaml`."""
+"""CLI entrypoint (`ild`), episode runner and reparse. `ild run --config configs/smoke.yaml`."""
 import argparse, asyncio, hashlib, json, os, random, subprocess, sys, time, uuid
 from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 from .prompts import load_conditions, load_variants, build_system_prompt, build_user_prompt
 from .client import OpenAICompatClient
-from . import parse, classify, ci, evaluate
-from .agentic_misalignment import SOURCE_COMMIT as CLASSIFIER_SOURCE
+from . import parse, classify, ci, evaluate, bench as benchmark
+from .harm_classifiers import SOURCE_COMMIT as CLASSIFIER_SOURCE
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
+DEFAULT_BENCH = "benchmark"      # bundled copy of the benchmark inputs (bench.py); `benchmark_dir` / --bench override
 DEFAULT_RESULTS = "../results"   # project-root results/ (mirrored to HF), not inside this repo
 PHASES = ("smoke", "validation", "pilot", "study")   # every config declares one; only `study` runs
                                                        # from a clean tree feed the study tables (eval.py)
@@ -32,10 +32,9 @@ def git_dirty(path) -> bool:
         return False
 
 def dataset_version(bench: Path):
-    """`git describe --tags --always --dirty` of the benchmark repo, e.g. `v0.2-1-g8f96467`:
-    the tag, commits since the tag, and the short hash — the dataset version every run records."""
-    try: return subprocess.check_output(["git", "-C", str(bench), "describe", "--tags", "--always", "--dirty"], text=True).strip()
-    except Exception: return "unknown"
+    """Benchmark revision every run records, e.g. `v0.2-5-g02f3da5` (manifest of the bundled
+    copy, or `git describe` of an external checkout)."""
+    return benchmark.version(bench)
 
 def prompt_set_sha256(bench: Path) -> str:
     """sha256 over sorted prompt-file names+contents. Variant wording changed under the
@@ -96,15 +95,21 @@ async def run_episode(client, cfg, cond, variant, variants, sample, sem):
     }
 
 async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool = False):
+    """`ild run`: validate the config, write meta.json, run every condition x variant x sample
+    and append episodes to episodes.jsonl (failures to failures.jsonl)."""
     load_dotenv(ROOT / ".env")
     cfg = yaml.safe_load(cfg_path.read_text())
     bench = (ROOT / cfg.get("benchmark_dir", DEFAULT_BENCH)).resolve()
     if not (bench / "data/conditions.jsonl").exists():
-        sys.exit(f"benchmark not found at {bench}: run `make benchmark` (clones it next to this repo) "
-                 f"or set `benchmark_dir` in the config")
+        sys.exit(f"benchmark not found at {bench}: the bundled copy is `benchmark/`; "
+                 f"`benchmark_dir` in the config points elsewhere")
+    if benchmark.manifest(bench) and (problems := benchmark.check(bench)):
+        sys.exit("refusing to run: the bundled benchmark differs from its manifest:\n  " + "\n  ".join(problems))
     # Reproducibility comes from config + commit + seed: a run from a dirty tree cannot be
     # reconstructed from git, so refuse unless explicitly allowed (and then stamp the run).
-    dirty = [name for name, p in (("code", ROOT), ("benchmark", bench)) if git_dirty(p)]
+    # The bundled copy lives in this repo, so the code check covers it; an external checkout is checked too.
+    trees = [("code", ROOT)] + ([] if bench.is_relative_to(ROOT) else [("benchmark", bench)])
+    dirty = [name for name, p in trees if git_dirty(p)]
     if dirty and not allow_dirty:
         sys.exit(f"refusing to run: uncommitted changes in {' and '.join(dirty)} repo(s). "
                  f"Commit first, or pass --allow-dirty to stamp the run non-reconstructible.")
@@ -159,7 +164,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     client = OpenAICompatClient(base_url=cfg.get("base_url"), api_key=api_key)
     sem = asyncio.Semaphore(cfg.get("concurrency", 4))
 
-    async def guarded(c, v, s):
+    async def guarded(c, v, s):   # run_episode that returns a failure record instead of raising
         # A failed episode (after retries) must not abort the run: it is written to
         # failures.jsonl with its error and can be re-run with --resume.
         try:
@@ -225,6 +230,7 @@ def cmd_reparse(run_dir: Path):
     print(f"{run_dir.name}: reparsed {len(eps)} episodes, {changed} changed")
 
 def main():
+    """Parse `ild <subcommand>` arguments and dispatch."""
     ap = argparse.ArgumentParser(prog="ild")
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run"); r.add_argument("--config", type=Path, required=True)
@@ -236,7 +242,7 @@ def main():
     rl.add_argument("--run", type=Path, required=True, nargs="+")
     c = sub.add_parser("classify", help="label episodes harmful/not with the bundled Agentic Misalignment classifiers (Gemini judge)")
     c.add_argument("--run", type=Path, required=True, nargs="+")
-    c.add_argument("--bench", type=Path, default=None, help=f"benchmark repo (default {DEFAULT_BENCH})")
+    c.add_argument("--bench", type=Path, default=None, help=f"benchmark dir (default: bundled {DEFAULT_BENCH}/)")
     c.add_argument("--model", default=classify.DEFAULT_MODEL)
     c.add_argument("--force", action="store_true", help="relabel episodes that already carry a label")
     c.add_argument("--concurrency", type=int, default=4)
@@ -252,6 +258,10 @@ def main():
     cc = sub.add_parser("check-configs", help="validate every configs/*.yaml against the benchmark without running anything (CI gate)")
     cc.add_argument("config_dir", type=Path, nargs="?", default=ROOT / "configs")
     cc.add_argument("--bench", type=Path, default=None)
+    cb = sub.add_parser("check-benchmark", help="verify the bundled benchmark copy against its manifest (CI gate)")
+    cb.add_argument("--bench", type=Path, default=None)
+    sb = sub.add_parser("sync-benchmark", help="refresh the bundled benchmark copy from a clean benchmark checkout")
+    sb.add_argument("--from", dest="source", type=Path, default=ROOT / "../INSIDER_LLM_DETECTION_BENCHMARK")
     e = sub.add_parser("eval", help="regenerate results/tables.md from run dirs")
     e.add_argument("--runs", type=Path, nargs="+", default=None, help="run dirs (default: all under the results root)")
     e.add_argument("--out", type=Path, default=None, help="output file (default: <results>/tables.md)")
@@ -276,6 +286,10 @@ def main():
         sys.exit(ci.cmd_fixture_check(a.fixtures))
     elif a.cmd == "check-configs":
         sys.exit(ci.cmd_check_configs(a.config_dir, (a.bench or ROOT / DEFAULT_BENCH).resolve(), PHASES))
+    elif a.cmd == "check-benchmark":
+        sys.exit(benchmark.cmd_check((a.bench or ROOT / DEFAULT_BENCH).resolve()))
+    elif a.cmd == "sync-benchmark":
+        sys.exit(benchmark.cmd_sync(a.source, ROOT / DEFAULT_BENCH))
     elif a.cmd == "eval":
         from . import eval as ev   # lazy: eval.py imports git_hash from this module
         ev.cmd_eval(a.runs, a.out)

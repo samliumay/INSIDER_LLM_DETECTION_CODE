@@ -1,4 +1,4 @@
-.PHONY: data sync-benchmark smoke baseline eval test ci publish-results
+.PHONY: data sync-benchmark smoke baseline eval test publish-results
 RESULTS_REPO ?= logicBombExe/INSIDER_LLM_DETECTION_RESULTS
 CONFIG ?= configs/smoke.yaml
 
@@ -22,11 +22,3 @@ publish-results: ## mirror ../results/ to the HF results dataset repo (hf CLI mu
 
 test:
 	uv run python -m pytest tests/ -q
-
-ci:              ## everything .github/workflows/ci.yml runs, locally
-	uv sync --frozen --group dev
-	uv run pytest -q
-	uv run ild fixture-check --fixtures tests/fixtures
-	uv run ild check-benchmark
-	uv run ild check-configs configs/
-	@! grep -nE "reportable[^_]|zero .not_logged. episodes exist|two (true )?omissions|observed twice|BEFORE_RESEARCH|decisions\.md|evaluation_plan|findings\.md|possible_improvements|power_analysis|docs/audits|internal (research )?workspace|standalone repository" README.md EXPERIMENTS.md || (echo "retired vocabulary found" && exit 1)

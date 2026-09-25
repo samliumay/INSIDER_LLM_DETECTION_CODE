@@ -1,5 +1,16 @@
 # Insider LLM Detection
 
+> **This repository is archived.** The work continues in four separate projects:
+>
+> | Project | Question | Code | Benchmark |
+> |---|---|---|---|
+> | how_reliable_models_self_logs | When a model writes its own action log, is that log true? | [GitHub](https://github.com/samliumay/how_reliable_models_self_logs) | [Hugging Face](https://huggingface.co/datasets/logicBombExe/how_reliable_models_self_logs) |
+> | double_logging_system_to_detect_an_unaligned_llm | Does comparing the model's own log with an automatic system log detect harmful behaviour? | [GitHub](https://github.com/samliumay/double_logging_system_to_detect_an_unaligned_llm) | [Hugging Face](https://huggingface.co/datasets/logicBombExe/double_logging_system_to_detect_an_unaligned_llm) |
+> | does_small_to_medium_sized_models_can_act_as_insider | Do small and medium-sized models act as insiders? | [GitHub](https://github.com/samliumay/does_small_to_medium_sized_models_can_act_as_insider) | [Hugging Face](https://huggingface.co/datasets/logicBombExe/does_small_to_medium_sized_models_can_act_as_insider) |
+> | do_old_insider_LLM_tests_still_work_today | Do the published insider-LLM tests still work on current models? | [GitHub](https://github.com/samliumay/do_old_insider_LLM_tests_still_work_today) | [Hugging Face](https://huggingface.co/datasets/logicBombExe/do_old_insider_LLM_tests_still_work_today) |
+>
+> The code and results below are kept as a record of the earlier study.
+
 A research framework for detecting **insider LLMs** with **double logging**. A model in a fictional corporate scenario is asked to log its own actions. The harness independently records every tool call the model makes. When the two logs disagree, that is the signal.
 
 Scenarios and harm classifiers come from Anthropic's [*Agentic Misalignment*](https://www.anthropic.com/research/agentic-misalignment) framework (MIT, bundled). Benchmark: [INSIDER_LLM_DETECTION_BENCHMARK](https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK) (a copy of the inputs is bundled in `benchmark/`). Results: [INSIDER_LLM_DETECTION_RESULTS](https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_RESULTS).
@@ -146,7 +157,8 @@ results/<run_id>/
 ## Development
 
 ```bash
-make ci      # tests, parser fixtures, bundled-benchmark check, config check
+make test    # unit tests
+uv run ild fixture-check --fixtures tests/fixtures   # parser fixtures
 ```
 - `benchmark/` is a copy of the benchmark inputs. Do not edit it here: change the benchmark repo, then run `make sync-benchmark`.
 - After a parser change, run `ild reparse --run <dir>`. It prints every new omission for hand checking.
